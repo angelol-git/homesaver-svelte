@@ -17,7 +17,7 @@
   });
 </script>
 
-<div class="w-87.5 h-125 p-4 border-red-800 border flex flex-col gap-1">
+<div class="w-87.5 h-125 p-4 border-gray-400 border flex flex-col gap-1">
   <Header />
   <Nav {sets} {currentSet} onUpdate={updateSet} />
   <SetList {sets} {currentSet} />
