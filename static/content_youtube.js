@@ -62,9 +62,9 @@ function handleHomeMutation(obs) {
   const latestLink = videoCardElements[MAX_VIDEOS_PER_SET - 1]?.querySelector(
     ".yt-lockup-metadata-view-model__title",
   ).href;
-  extensionAPI.storage.local.get("sets", (result) => {
-    const existingSets = result.sets || [];
-    const lastSet = existingSets[0] || [];
+  extensionAPI.storage.local.get("yt-homesaver", (result) => {
+    const existingData = result["yt-homesaver"]?.sets || [];
+    const lastSet = existingData[0] || [];
     const lastLink = lastSet[MAX_VIDEOS_PER_SET - 1]?.link;
 
     if (latestLink && lastLink && latestLink === lastLink) {
@@ -93,15 +93,22 @@ async function parseData(videoCardElements) {
         ".yt-lockup-metadata-view-model__title",
       );
       if (!linkElement) return null;
-
+      const channelElement = video.querySelector(
+        ".yt-core-attributed-string__link",
+      );
+      const videoLengthElement = video.querySelector(".yt-badge-shape__text");
       const titleElement =
         linkElement?.textContent.trim() ||
         linkElement.getAttribute("aria-label");
+      const videoLength = videoLengthElement?.textContent.trim();
+      const channel = channelElement?.textContent.trim();
       return {
         id: generateUUIDv7(),
         thumbnail,
         title: titleElement,
         link: linkElement.href,
+        length: videoLength,
+        channel: channel,
       };
     }),
   );
@@ -140,18 +147,21 @@ function waitForImgSrc(img, timeout = 5000) {
 
 async function saveToStorage(newSet) {
   return new Promise((resolve) => {
-    extensionAPI.storage.local.get("sets", (result) => {
-      const existingSets = result.sets || [];
-      const updatedSets = [newSet, ...existingSets];
+    extensionAPI.storage.local.get("yt-homesaver", (result) => {
+      const existingData = result["yt-homesaver"]?.sets || [];
+      const updatedSets = [newSet, ...existingData];
 
       if (updatedSets.length > MAX_SET) {
         updatedSets.pop();
       }
 
-      extensionAPI.storage.local.set({ sets: updatedSets }, () => {
-        console.log("New set saved");
-        resolve();
-      });
+      extensionAPI.storage.local.set(
+        { "yt-homesaver": { sets: updatedSets } },
+        () => {
+          console.log("New set saved");
+          resolve();
+        },
+      );
     });
   });
 }

@@ -1,6 +1,7 @@
 // Storage adapter that works with both chrome.storage (extension) and localStorage (dev mode)
 
-const isExtension = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+const isExtension =
+  typeof chrome !== "undefined" && chrome.storage && chrome.storage.local;
 
 /**
  * Get data from storage

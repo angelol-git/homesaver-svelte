@@ -13,7 +13,7 @@
     currentSet = index;
   }
   onMount(async () => {
-    const data = await getStorage("yt-home-saver");
+    const data = await getStorage("yt-homesaver");
     sets = data?.sets || [];
 
     if (sets.length < 4) {
@@ -27,7 +27,7 @@
   });
 </script>
 
-<div class="w-87.5 h-125 p-4 border-gray-400 border flex flex-col gap-2">
+<div class="w-87.5 h-125 border-gray-400 border flex flex-col gap-1">
   <Header />
   <Nav {sets} {currentSet} onUpdate={updateSet} />
   <SetList {sets} {currentSet} />

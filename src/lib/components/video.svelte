@@ -45,6 +45,6 @@
     >
       {video.title}
     </h3>
-    <p class="text-gray-600 text-xs font">Creator</p>
+    <p class="text-gray-600 text-xs font">{video.channel}</p>
   </div>
 </a>

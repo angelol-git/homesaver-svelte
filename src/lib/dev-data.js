@@ -123,9 +123,9 @@ export function initDevData(storage) {
     async setup() {
       // Only initialize in browser (not extension)
       if (typeof chrome === "undefined" || !chrome.storage) {
-        const existing = await getStorage("yt-home-saver");
+        const existing = await getStorage("yt-homesaver");
         if (!existing) {
-          await setStorage("yt-home-saver", devData);
+          await setStorage("yt-homesaver", devData);
           console.log("Dev data initialized");
         }
       }

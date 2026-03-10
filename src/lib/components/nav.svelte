@@ -9,13 +9,13 @@
   $inspect(sets);
 </script>
 
-<nav class="flex gap-1 justify-between">
+<nav class="flex gap-1 px-4 justify-between">
   {#each sets as set, index}
     <button
       onclick={() => {
         onUpdate(index);
       }}
-      class="flex items-center justify-center gap-1 transition-colors duration-100 px-3 py-1 font-medium rounded-full cursor-pointer text-sm"
+      class="flex items-center justify-center gap-1 transition-colors duration-100 px-3 py-1 rounded-full cursor-pointer text-sm"
       class:hover:bg-gray-300={currentSet !== index}
       class:bg-blue-500={currentSet === index}
       class:text-white={currentSet === index}
