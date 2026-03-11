@@ -6,7 +6,7 @@ HomeSaver is a Chrome extension that saves videos from your YouTube home page. B
 
 ## Installation Guide
 
-1. Download the [measured-v1.0.zip](https://github.com/angelol-git/measured/tree/main/packages/) file.
+1. Download the [homesaver-extension-v.1.0.0zip](https://github.com/angelol-git/yt-homesaver-svelte/tree/main/packages/) file.
 2. Unzip the file.
 3. Open Chrome and navigate to chrome://extensions/.
 4. Enable "Developer mode" if it is not already enabled.
