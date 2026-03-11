@@ -2,7 +2,7 @@
 
 HomeSaver is a Chrome extension that saves videos from your YouTube home page. Because the YouTube home page constantly refreshes and changes recommendations, it’s easy to lose a video after a misclick or accidental refresh. HomeSaver preserves up to four sets of six videos so you can return to them later.
 
-<img src="https://github.com/angelol-git/yt-homesaver-svelte/blob/main/.github/screenshot.png?raw=true"  alt="screenshot of chrome extension. Showing set 2 of 4 and 5 videos with metadata info."/>
+<img src="https://github.com/angelol-git/yt-homesaver-svelte/blob/main/.github/screenshot.png?raw=true"  alt="screenshot of chrome extension. Showing set 2 of 4 and 5 videos with metadata info." width="350"/>
 
 ## Installation Guide
 
