@@ -1,42 +1,13 @@
-# sv
+# <img src="https://github.com/angelol-git/yt-homesaver-svelte/blob/main/.github/logo.png?raw=true" width="32" /> HomeSaver
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+HomeSaver is a Chrome extension that saves videos from your YouTube home page. Because the YouTube home page constantly refreshes and changes recommendations, it’s easy to lose a video after a misclick or accidental refresh. HomeSaver preserves up to four sets of six videos so you can return to them later.
 
-## Creating a project
+<img src="https://github.com/angelol-git/yt-homesaver-svelte/blob/main/.github/screenshot.png?raw=true"  alt="screenshot of chrome extension. Showing set 2 of 4 and 5 videos with metadata info."/>
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Installation Guide
 
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.12.5 create --template minimal --no-types --add tailwindcss="plugins:none" --install npm yt-homesaver-svelte
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+1. Download the [measured-v1.0.zip](https://github.com/angelol-git/measured/tree/main/packages/) file.
+2. Unzip the file.
+3. Open Chrome and navigate to chrome://extensions/.
+4. Enable "Developer mode" if it is not already enabled.
+5. Click "Load unpacked" and select the unzipped folder (or drag the folder into the page).
