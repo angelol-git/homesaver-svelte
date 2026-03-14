@@ -5,49 +5,40 @@ const extensionAPI = typeof browser !== "undefined" ? browser : chrome;
 
 let isProcessing = false;
 let lastProcessedDataHash = null;
-let dataCheckInterval = null;
+let domObserver = null;
+let navigationDebounceTimer = null;
+
+// Track navigation state to reset hash when leaving homepage
+let wasOnHomepage = location.pathname === "/";
 
 function generateDataHash(videoIds) {
   return videoIds.slice(0, MAX_VIDEOS_PER_SET).join("|");
 }
 
 function init() {
-  injectPageScript();
-
-  window.addEventListener("message", handlePageMessage);
-
   if (location.pathname === "/") {
-    requestYtData();
+    waitForDomAndParse();
   }
 
   setupNavigationListener();
+  setupDomObserver();
 }
 
-// Inject script into page to access ytInitialData
-function injectPageScript() {
-  const script = document.createElement("script");
-  script.src = extensionAPI.runtime.getURL("page_script.js");
-  script.onload = function () {
-    this.remove();
-  };
-  (document.head || document.documentElement).appendChild(script);
-}
-
-function handlePageMessage(event) {
-  if (event.source !== window) return;
-  if (event.data.type !== "HOME_DATA") return;
-
-  const data = event.data.payload;
-  if (data) {
-    console.log("[HomeSaver] Received ytInitialData from page script");
-    parseAndSaveVideos(data);
+// Wait for DOM to be ready and videos to appear
+function waitForDomAndParse() {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      setTimeout(parseAndSaveVideos, 2000);
+    });
   } else {
-    console.log("[HomeSaver] Page script reported no data available");
+    const videosExist =
+      document.querySelectorAll("ytd-rich-item-renderer").length > 0;
+    if (videosExist) {
+      setTimeout(parseAndSaveVideos, 500);
+    } else {
+      setTimeout(waitForDomAndParse, 1000);
+    }
   }
-}
-
-function requestYtData() {
-  window.postMessage({ type: "HOME_REQUEST_DATA" }, "*");
 }
 
 function setupNavigationListener() {
@@ -55,98 +46,189 @@ function setupNavigationListener() {
 
   // YouTube's internal navigation event
   window.addEventListener("yt-navigate-finish", () => {
-    console.log("[HomeSaver] yt-navigate-finish event fired");
-    if (location.pathname === "/" && location.href !== previousUrl) {
-      previousUrl = location.href;
-      console.log("[HomeSaver] Navigated to homepage, requesting data...");
-      setTimeout(requestYtData, 500);
+    const currentUrl = location.href;
+    const isOnHomepage = location.pathname === "/";
+
+    if (wasOnHomepage && !isOnHomepage) {
+      console.log("[HomeSaver] Navigated away from homepage - resetting hash");
+      lastProcessedDataHash = null;
+    }
+
+    wasOnHomepage = isOnHomepage;
+    if (isOnHomepage && currentUrl !== previousUrl) {
+      previousUrl = currentUrl;
+      console.log("[HomeSaver] Navigated to homepage");
+
+      clearTimeout(navigationDebounceTimer);
+      navigationDebounceTimer = setTimeout(() => {
+        parseAndSaveVideos();
+      }, 3000);
     }
   });
 
   // Fallback: observe URL changes
-  const observer = new MutationObserver(() => {
-    if (location.href !== previousUrl) {
-      previousUrl = location.href;
-      if (location.pathname === "/") {
-        console.log("[HomeSaver] URL changed to homepage, requesting data...");
-        setTimeout(requestYtData, 500);
+  const urlObserver = new MutationObserver(() => {
+    const currentUrl = location.href;
+    if (currentUrl !== previousUrl) {
+      const isOnHomepage = location.pathname === "/";
+
+      if (wasOnHomepage && !isOnHomepage) {
+        console.log(
+          "[HomeSaver] Navigated away from homepage (fallback) - resetting hash",
+        );
+        lastProcessedDataHash = null;
+      }
+
+      wasOnHomepage = isOnHomepage;
+      previousUrl = currentUrl;
+
+      if (isOnHomepage) {
+        clearTimeout(navigationDebounceTimer);
+        navigationDebounceTimer = setTimeout(() => {
+          parseAndSaveVideos();
+        }, 3000);
       }
     }
   });
 
-  observer.observe(document, { subtree: true, childList: true });
+  urlObserver.observe(document, { subtree: true, childList: true });
 }
 
-function parseVideosFromData(data) {
+// Observe DOM changes to detect new videos
+function setupDomObserver() {
+  let domChangeTimeout = null;
+
+  domObserver = new MutationObserver((mutations) => {
+    if (location.pathname !== "/" || isProcessing) return;
+
+    const hasVideoChanges = mutations.some((mutation) => {
+      return Array.from(mutation.addedNodes).some((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          return (
+            node.matches?.("ytd-rich-item-renderer") ||
+            node.querySelector?.("ytd-rich-item-renderer")
+          );
+        }
+        return false;
+      });
+    });
+
+    if (hasVideoChanges) {
+      clearTimeout(domChangeTimeout);
+      domChangeTimeout = setTimeout(() => {
+        console.log(
+          "[HomeSaver] DOM changed - new videos detected, parsing...",
+        );
+        parseAndSaveVideos();
+      }, 1500);
+    }
+  });
+
+  domObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function parseVideosFromDOM() {
   try {
-    if (!data) {
-      console.log("[HomeSaver] No data provided to parseVideosFromData");
-      return null;
-    }
-
-    const contents =
-      data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer
-        ?.content?.richGridRenderer?.contents;
-
-    if (!Array.isArray(contents)) {
-      console.log("[HomeSaver] No contents array found");
-      return null;
-    }
-
-    // console.log("[HomeSaver] Found", contents.length, "items in contents");
-
     const videos = [];
 
-    for (const item of contents) {
-      if (videos.length >= MAX_VIDEOS_PER_SET) break;
+    const videoItems = document.querySelectorAll("ytd-rich-item-renderer");
+    if (videoItems.length === 0) {
+      console.log("[HomeSaver] No video items found in DOM yet");
+      return null;
+    }
 
-      const lockup = item?.richItemRenderer?.content?.lockupViewModel;
-      if (!lockup) continue;
+    for (const item of videoItems) {
+      if (videos.length >= MAX_VIDEOS_PER_SET) break;
 
       // Skip shorts
       const isShort =
-        item?.richItemRenderer?.content?.shortsLockupViewModel !== undefined;
-      if (isShort) continue;
+        item.querySelector("ytd-shorts-lockup-view-model") !== null ||
+        item.querySelector('[overlay-style="SHORTS"]') !== null ||
+        item.querySelector(
+          "ytd-thumbnail-overlay-time-status-renderer[overlay-style='SHORTS']",
+        ) !== null;
 
-      const videoId =
-        lockup?.contentId ||
-        lockup?.itemPlayback?.inlinePlayerData?.onSelect?.innertubeCommand
-          ?.watchEndpoint?.videoId;
+      if (isShort) {
+        continue;
+      }
+
+      // Skip ads
+      const isAd =
+        item.querySelector("ytd-ad-slot-renderer") !== null ||
+        item.querySelector("ytd-in-feed-ad-layout-renderer") !== null ||
+        item.querySelector("ytd-display-ad-renderer") !== null ||
+        item.querySelector("[is-ad]") !== null ||
+        item.querySelector(".ytd-ad-slot-renderer") !== null ||
+        item.querySelector(".ytd-in-feed-ad-layout-renderer") !== null ||
+        item.textContent?.includes("Sponsored") ||
+        item.textContent?.includes("Ad ") ||
+        item.querySelector(".badge-style-type-ad") !== null;
+
+      if (isAd) {
+        continue;
+      }
+
+      // Link
+      const thumbnailLink = item.querySelector(
+        "a.yt-lockup-view-model__content-image",
+      );
+      if (!thumbnailLink) continue;
+
+      const href = thumbnailLink.getAttribute("href");
+      if (!href) continue;
+
+      // Video Id
+      const videoIdMatch = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+      const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
       if (!videoId) continue;
 
-      const metadata = lockup?.metadata?.lockupMetadataViewModel;
-      if (!metadata) continue;
+      // Title
+      let title = null;
+      const titleLink = item.querySelector(
+        "h3.yt-lockup-metadata-view-model__heading-reset a.yt-lockup-metadata-view-model__title",
+      );
+      if (titleLink) {
+        title =
+          titleLink.textContent?.trim() ||
+          titleLink.getAttribute("title")?.trim();
+      }
 
-      const title = metadata?.title?.content;
       if (!title) continue;
 
-      // Get thumbnail from thumbnailViewModel
-      const thumbnailSources =
-        lockup?.contentImage?.thumbnailViewModel?.image?.sources;
-      const thumbnail = thumbnailSources?.[0]?.url || null;
+      // Thumbnail Image
+      let thumbnail = null;
+      const thumbnailImg = item.querySelector(
+        "img.ytCoreImageHost, img.yt-core-image, yt-image img",
+      );
+      if (thumbnailImg) {
+        thumbnail =
+          thumbnailImg.src ||
+          thumbnailImg.getAttribute("data-thumb") ||
+          `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      } else {
+        thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      }
 
-      // Get channel info
-      const channelAvatar = metadata?.image?.decoratedAvatarViewModel;
-      const channelName =
-        metadata?.metadata?.contentMetadataViewModel?.metadataRows?.[0]
-          ?.metadataParts?.[0]?.text?.content ||
-        channelAvatar?.avatar?.avatarViewModel?.a11yLabel?.replace(
-          "Go to channel ",
-          "",
-        );
+      // Channel name
+      let channelName = null;
+      const channelLink = item.querySelector(
+        "yt-content-metadata-view-model a[href^='/@']",
+      );
+      if (channelLink) {
+        channelName = channelLink.textContent?.trim();
+      }
 
-      // Get video duration from badges
-      const overlays = lockup?.contentImage?.thumbnailViewModel?.overlays || [];
+      // Duration
       let duration = null;
-      for (const overlay of overlays) {
-        const badge =
-          overlay?.thumbnailBottomOverlayViewModel?.badges?.[0]
-            ?.thumbnailBadgeViewModel?.text;
-        if (badge) {
-          duration = badge;
-          break;
-        }
+      const durationBadge = item.querySelector(
+        "badge-shape .yt-badge-shape__text",
+      );
+      if (durationBadge) {
+        duration = durationBadge.textContent?.trim();
       }
 
       videos.push({
@@ -161,45 +243,43 @@ function parseVideosFromData(data) {
 
     return videos.length > 0 ? videos : null;
   } catch (error) {
-    console.error("[HomeSaver] Error parsing ytInitialData:", error);
+    console.error("[HomeSaver] Error parsing DOM:", error);
     return null;
   }
 }
 
-async function parseAndSaveVideos(data) {
+async function parseAndSaveVideos() {
   if (isProcessing) {
     console.log("[HomeSaver] Already processing, skipping");
     return;
   }
+
   isProcessing = true;
 
   try {
-    if (!data) {
-      console.log("[HomeSaver] No data received");
-      isProcessing = false;
-      return;
-    }
-
-    const videos = parseVideosFromData(data);
+    const videos = parseVideosFromDOM();
 
     if (!videos || videos.length === 0) {
-      console.log("[HomeSaver] No videos found in data");
+      console.log("[HomeSaver] No videos found in DOM");
       isProcessing = false;
       return;
     }
 
-    const videoIds = videos.map((v) => v.link);
-    const dataHash = generateDataHash(videoIds);
+    const videoLinks = videos.map((v) => v.link);
+    const dataHash = generateDataHash(videoLinks);
 
+    // Check if this is the same data as last time
     if (dataHash === lastProcessedDataHash) {
-      console.log("[HomeSaver] Same homepage data, skipping save");
+      console.log("[HomeSaver] Same data as last processed, skipping save");
       isProcessing = false;
       return;
     }
 
+    // Check against stored data
     const stored = await getStoredData();
     const lastSet = stored[0]?.videos || [];
-    const lastSetHash = generateDataHash(lastSet.map((v) => v.link));
+    const lastSetVideoLinks = lastSet.map((v) => v.link);
+    const lastSetHash = generateDataHash(lastSetVideoLinks);
 
     if (dataHash === lastSetHash) {
       console.log("[HomeSaver] Data matches stored set, skipping save");
@@ -217,7 +297,6 @@ async function parseAndSaveVideos(data) {
 
     await saveToStorage(set);
     lastProcessedDataHash = dataHash;
-    console.log(`[HomeSaver] Saved ${set.videos.length} videos`);
   } catch (error) {
     console.error("[HomeSaver] Error in parseAndSaveVideos:", error);
   } finally {
@@ -248,7 +327,6 @@ async function saveToStorage(newSet) {
       extensionAPI.storage.local.set(
         { homesaver: { sets: updatedSets } },
         () => {
-          // console.log("[HomeSaver] New set saved to storage");
           resolve();
         },
       );
